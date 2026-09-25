@@ -4,24 +4,21 @@ MANDIR?= ${PREFIX}/share/man
 INSTALL?= install
 INSTALLDIR= ${INSTALL} -d
 INSTALLBIN= ${INSTALL} -m 755
-INSTALLMAN= ${INSTALL} -m 644
 
-all: fasd.1
+all: test
 
 uninstall:
 	rm -f ${DESTDIR}${BINDIR}/fasd
-	rm -f ${DESTDIR}${MANDIR}/man1/fasd.1
+	rm -f ${DESTDIR}${MANDIR}/man1/fasd.1 # installed by older versions
 
 install:
 	${INSTALLDIR} ${DESTDIR}${BINDIR}
 	${INSTALLBIN} fasd ${DESTDIR}${BINDIR}
-	${INSTALLDIR} ${DESTDIR}${MANDIR}/man1
-	${INSTALLMAN} fasd.1 ${DESTDIR}${MANDIR}/man1
 
-man: fasd.1
+# make test          run all tests
+# make test T=name   run test/name.test.zsh only
+test:
+	zsh -n fasd
+	zsh -f test/run.zsh $(T)
 
-fasd.1: fasd.1.md
-	pandoc -s -w man fasd.1.md -o fasd.1
-
-.PHONY: all install uninstall man
-
+.PHONY: all install uninstall test

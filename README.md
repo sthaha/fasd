@@ -1,7 +1,7 @@
 # Fasd
 
 Fasd (pronounced similar to "fast") is a command-line productivity booster.
-Fasd offers quick access to files and directories for POSIX shells. It is
+Fasd offers quick access to files and directories in zsh. It is
 inspired by tools like [autojump](https://github.com/joelthelion/autojump),
 [z](http://github.com/rupa/z) and [v](https://github.com/rupa/v). Fasd keeps
 track of files and directories you have accessed, so that you can quickly
@@ -66,9 +66,9 @@ Download fasd 1.0.1 from GitHub:
 [zip](https://github.com/clvv/fasd/zipball/1.0.1),
 [tar.gz](https://github.com/clvv/fasd/tarball/1.0.1).
 
-Fasd is a self-contained POSIX shell script that can be either sourced or
-executed. A Makefile is provided to install `fasd` and `fasd.1` to desired
-places.
+Fasd is a self-contained zsh script that can be either sourced or executed.
+It requires zsh 5.5 or newer. A Makefile is provided to install `fasd` to
+desired places.
 
 System-wide install:
 
@@ -88,8 +88,8 @@ line below in your shell rc.
 eval "$(fasd --init auto)"
 ```
 
-This will setup a command hook that executes on every command and advanced tab
-completion for zsh and bash.
+This will setup a command hook (zsh `preexec`) that executes on every command
+and tab completion.
 
 If you want more control over what gets into your shell environment, you can
 pass customized set of arguments to `fasd --init`.
@@ -100,13 +100,7 @@ zsh-ccomp            # zsh command mode completion definitions
 zsh-ccomp-install    # setup command mode completion for zsh
 zsh-wcomp            # zsh word mode completion definitions
 zsh-wcomp-install    # setup word mode completion for zsh
-bash-hook            # add hook code to bash $PROMPT_COMMAND
-bash-ccomp           # bash command mode completion definitions
-bash-ccomp-install   # setup command mode completion for bash
-posix-alias          # define aliases that applies to all posix shells
-posix-hook           # setup $PS1 hook for shells that's posix compatible
-tcsh-alias           # define aliases for tcsh
-tcsh-hook            # setup tcsh precmd alias
+posix-alias          # define the default aliases and the fasd_cd function
 ```
 
 Example for a minimal zsh setup (no tab completion):
@@ -117,27 +111,26 @@ eval "$(fasd --init posix-alias zsh-hook)"
 
 Note that this method will slightly increase your shell start-up time, since
 calling binaries has overhead. You can cache fasd init code if you want minimal
-overhead. Example code for bash (to be put into .bashrc):
+overhead. Example code (to be put into .zshrc):
 
 ```sh
-fasd_cache="$HOME/.fasd-init-bash"
-if [ "$(command -v fasd)" -nt "$fasd_cache" -o ! -s "$fasd_cache" ]; then
-  fasd --init posix-alias bash-hook bash-ccomp bash-ccomp-install >| "$fasd_cache"
+fasd_cache="$HOME/.fasd-init-zsh"
+if [[ "$(command -v fasd)" -nt "$fasd_cache" || ! -s "$fasd_cache" ]]; then
+  fasd --init posix-alias zsh-hook zsh-ccomp zsh-ccomp-install \
+    zsh-wcomp zsh-wcomp-install >| "$fasd_cache"
 fi
 source "$fasd_cache"
 unset fasd_cache
 ```
 
-Optionally, if you can also source `fasd` if you want `fasd` to be a shell
+Optionally, you can also source `fasd` if you want `fasd` to be a shell
 function instead of an executable.
 
 You can tweak initialization code. For instance, if you want to use "c"
 instead of "z" to do directory jumping, you can use the alias below:
 
 ```sh
-alias c='fasd_cd -d'
-# `-d` option present for bash completion
-# function fasd_cd is defined in posix-alias
+alias c='fasd_cd -d' # function fasd_cd is defined in posix-alias
 ```
 
 After you first installed fasd, open some files (with any program) or `cd`
@@ -164,11 +157,6 @@ alias m='f -e mplayer' # quick opening files with mplayer
 alias o='a -e xdg-open' # quick opening files with xdg-open
 ```
 
-If you're using bash, you have to call `_fasd_bash_hook_cmd_complete` to make
-completion work. For instance:
-
-    _fasd_bash_hook_cmd_complete v m j o
-
 You could select an entry in the list of matching files.
 
 # Matching
@@ -191,6 +179,10 @@ Tips:
   `/` as the last query.
 * If you want your last query to match the end of the filename, append `$` to
   the last query.
+* Query characters are matched literally: `*`, `?`, `[`, `(` and other glob
+  characters have no special meaning.
+* `$_FASD_FUZZY` limits how many characters fuzzy matching may skip between two
+  query characters. Fuzzy matching never crosses a `/`.
 
 # How It Works
 
@@ -199,19 +191,21 @@ executed whenever you execute a command. The hook will scan your commands'
 arguments and determine if any of them refer to existing files or directories.
 If yes, fasd will add them to the database.
 
+The database (`$_FASD_DATA`) has one `path|rank|last_access` line per entry.
+Paths that contain `|` or a newline cannot be stored and are ignored. Updates
+are serialized with a lock file (`$_FASD_DATA.lock`); if the lock cannot be
+taken within one second, the update is skipped so the prompt never blocks.
+
 # Compatibility
 
-Fasd's basic functionalities are POSIX compliant, meaning that you should be
-able to use fasd in all POSIX compliant shells. Your shell need to support
-command substitution in `$PS1` in order for fasd to automatically track your
-commands and files. This feature is not specified by the POSIX standard, but
-it's nonetheless present in many POSIX compliant shells. In shells without
-prompt command or prompt command substitution (csh for instance), you can add
-entries manually with `fasd -A`. You are very welcomed to contribute shell
-initialization code for not yet supported shells.
+This version of fasd is written for zsh and requires zsh 5.5 or newer; it
+exits with an error on older versions. It does not support bash, tcsh or other
+POSIX shells (the original POSIX version of fasd does). Besides zsh, fasd
+needs `awk` (any of mawk, gawk, BSD awk), `sed`, `sort`, `tr` and `mktemp`.
 
-Fasd has been tested on the following shells: bash, zsh, mksh, pdksh, dash,
-busybox ash, FreeBSD 9 /bin/sh and OpenBSD /bin/sh.
+On other shells you can still execute `fasd` as a command (for instance
+`fasd -A path` or `` cd "$(fasd -d foo)" ``) as long as zsh is installed, but
+there is no automatic tracking.
 
 # Synopsis
 
@@ -239,9 +233,8 @@ busybox ash, FreeBSD 9 /bin/sh and OpenBSD /bin/sh.
 
 # Tab Completion
 
-Fasd offers two completion modes, command mode completion and word mode
-completion. Command mode completion works in bash and zsh. Word mode
-completion only works in zsh.
+Fasd offers two completion modes for zsh, command mode completion and word
+mode completion.
 
 Command mode completion is just like completion for any other commands. It is
 triggered when you hit tab on a `fasd` command or its aliases. Under this mode
@@ -333,10 +326,6 @@ File to log all STDERR to, defaults to "/dev/null".
 $_FASD_MAX
 Max total score / weight, defaults to 2000.
 
-$_FASD_SHELL
-Which shell to execute. Some shells will run faster than others. fasd
-runs faster with dash and ksh variants.
-
 $_FASD_BACKENDS
 Default backends.
 
@@ -356,6 +345,14 @@ $_FASD_RECENTLY_USED_XBEL
 Path to XDG recently-used.xbel file for recently-used backend, defaults to
 "$HOME/.local/share/recently-used.xbel"
 
+$_FASD_NORC
+If set to any non-empty string, "/etc/fasdrc" and "$HOME/.fasdrc" are not
+sourced. Set it in the environment, not in an rc file.
+
+$_FASD_NOW
+If set, used as the current time (epoch seconds) instead of the clock. Meant
+for tests.
+
 ```
 
 # Debugging
@@ -368,6 +365,15 @@ You can set `_FASD_SINK` in your `.fasdrc` to obtain a log.
 
 ```sh
 _FASD_SINK="$HOME/.fasd.log"
+```
+
+To run the test suite (needs only zsh and the tools listed under
+Compatibility):
+
+```sh
+make test              # all tests
+make test T=matching   # only test/matching.test.zsh
+_FASD_AWK=gawk make test
 ```
 
 # COPYING

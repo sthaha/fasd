@@ -1,0 +1,66 @@
+name: test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / ${{ matrix.awk }} / zsh ${{ matrix.zsh }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        awk: [gawk, mawk, awk]
+        zsh: [distro]
+        include:
+          # zsh version floor: catches features that need a zsh newer than 5.5
+          - os: ubuntu-latest
+            awk: awk
+            zsh: 5.5.1
+    env:
+      _FASD_AWK: ${{ matrix.awk }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies (ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zsh gawk mawk libncurses-dev
+
+      - name: Install dependencies (macos)
+        if: runner.os == 'macOS'
+        run: brew install gawk mawk
+
+      - name: Cache zsh ${{ matrix.zsh }}
+        if: matrix.zsh != 'distro'
+        id: cache-zsh
+        uses: actions/cache@v4
+        with:
+          path: ~/zsh-${{ matrix.zsh }}
+          key: zsh-${{ matrix.zsh }}-${{ matrix.os }}
+
+      - name: Build zsh ${{ matrix.zsh }}
+        if: matrix.zsh != 'distro' && steps.cache-zsh.outputs.cache-hit != 'true'
+        run: |
+          curl -fsSL -o zsh.tar.xz https://www.zsh.org/pub/old/zsh-${{ matrix.zsh }}.tar.xz
+          tar xf zsh.tar.xz
+          cd zsh-${{ matrix.zsh }}
+          CFLAGS="-O2 -Wno-implicit-function-declaration -Wno-implicit-int" \
+            ./configure --prefix="$HOME/zsh-${{ matrix.zsh }}" --disable-gdbm
+          make -j"$(nproc)"
+          make install.bin install.modules install.fns
+
+      - name: Use zsh ${{ matrix.zsh }}
+        if: matrix.zsh != 'distro'
+        run: echo "$HOME/zsh-${{ matrix.zsh }}/bin" >> "$GITHUB_PATH"
+
+      - name: Show versions
+        run: |
+          zsh --version
+          command -v "$_FASD_AWK"
+
+      - name: Run tests
+        run: make test
