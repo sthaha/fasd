@@ -43,17 +43,27 @@ zsh -n fasd                      # syntax check
 
 ## Architecture
 
-Everything lives in a single `fasd()` function dispatched by a top-level `case $1`. At the bottom, the script runs `fasd --init env`, then either returns (when sourced, detected via `$ZSH_EVAL_CONTEXT`) or calls `fasd "$@"` (when executed). Internal operations recurse by calling `fasd --<op>`.
+`fasd()` is a thin dispatcher (under 30 lines): `setopt localoptions extendedglob warncreateglobal`, then a top-level `case $1` that calls one `_fasd_<op>` helper per public op. All helpers are top-level functions defined before `fasd()`, inherit `fasd()`'s `setopt` (they must not `setopt` themselves, except `_fasd_init_env`), and declare every variable `local`. At the bottom, the script runs `fasd --init env`, then either returns (when sourced, detected via `$ZSH_EVAL_CONTEXT`) or calls `fasd "$@"` (when executed). Internal operations call the `_fasd_*` helpers directly instead of recursing through `fasd --<op>`.
 
-Internal subcommands:
+Two helpers pass a value back to their caller through zsh's dynamic scoping instead of `stdout`/return code, so the caller must declare the variable `local` itself before calling:
+- `_fasd_lock` sets the caller's `$lockfd` (from `zsystem flock`).
+- `_fasd_query_patterns` fills the caller's `local -a pats` with the match patterns.
+- `_fasd_parse_args` / `_fasd_parse_opt` (used only by `_fasd_main`) fill a larger set of the caller's locals the same way: `fnd`, `last`, `_FASD_BACKENDS`, `comp`, `exec`, `show`, `lst`, `interactive`, `mode`, `typ`, `r`, `_fasd_i`, `i`, plus the internal control-flow locals `_fasd_rc` and `_fasd_shift2`.
 
-- `--init <modules...>`: `env` sets `_FASD_*` defaults (sourcing `/etc/fasdrc` and `~/.fasdrc` first) and picks an awk. Other modules (`auto`, `posix-alias`, `zsh-hook`, `zsh-ccomp[-install]`, `zsh-wcomp[-install]`) **print** shell code for the user to `eval` in `.zshrc`; they do not run it.
-- `--proc`: invoked from the `preexec` hook with the tokenized command line. Applies `_FASD_BLACKLIST` / `_FASD_SHIFT` (e.g. strip `sudo`) / `_FASD_IGNORE`, then `--add`s the arguments.
-- `--add` / `--delete`: under a lock (`--lock`, `zsystem flock` on `$_FASD_DATA.lock`, gives up after 1 s), rewrite the database through awk into a `mktemp` file, then `mv` it over `$_FASD_DATA` (atomic replace). Paths reach awk via `ENVIRON`, newline separated; `--add` rejects paths containing `|` or newline. Both no-op if `_FASD_RO` is set or the data file is owned by someone else.
-- `--query <typ> <fnd> <mode>`: loads data from backends, filters by type (`e`/`f`/`d`), matches in 3 passes (exact glob, then case-insensitive `(#i)`, then fuzzy if `_FASD_FUZZY > 0`, allowing up to `_FASD_FUZZY` non-`/` chars between query chars). Query words are quoted with `${(b)...}`; the pattern is `*w1*...*wN[^/]#` (last word in last segment; a trailing `$` drops the `[^/]#`). Scores in awk: `rank`, `recent`, or the default frecency (`rank * frecent(last_access)` with weights 6/4/2/1 for <1h/<1d/<1w/older). Output is `score path` lines.
-- `--backend <name>`: emits `path|rank|time` rows from `native` (the data file), `viminfo`, `recently-used`, `current`, `spotlight` (macOS `mdfind`), or `eval`s any other name as a custom command.
-- `--word-complete-trigger`, `--complete`: tab-completion plumbing for the `,query` / `f,query` / `query,,d` word-completion syntax.
-- Default branch (`*`): user-facing option parsing (`-s -l -i -e -b -B -a -d -f -r -t -R -[0-9]`), then sort/select results, `--add` the chosen path back (reinforcing it), and print or `eval "$exec"` on it.
+Helper functions:
+
+- `_fasd_init <modules...>`: loops over `--init` modules, calling `_fasd_init_env` for `env` and `_fasd_init_code <module>` for the rest.
+- `_fasd_init_env`: sets `_FASD_*` defaults (sourcing `/etc/fasdrc` and `~/.fasdrc` first) and picks an awk. Keeps the `nowarncreateglobal` wrapping since it intentionally sets globals.
+- `_fasd_init_code <module>`: one `case` that **prints** the shell code for a module (`auto`, `posix-alias`, `zsh-hook`, `zsh-ccomp[-install]`, `zsh-wcomp[-install]`) via unexpanded heredocs, for the user to `eval` in `.zshrc`; it does not run the code itself. The longest function in the file (mostly heredoc text), and exempt from the 80-line limit the other helpers follow.
+- `_fasd_writable`: returns 0 when writing to `$_FASD_DATA` is allowed (replaces 3 copies of the same guard).
+- `_fasd_proc`: invoked from the `preexec` hook with the tokenized command line. Applies `_FASD_BLACKLIST` / `_FASD_SHIFT` (e.g. strip `sudo`) / `_FASD_IGNORE`, then calls `_fasd_add` with the remaining arguments.
+- `_fasd_lock`: `zsystem flock` on `$_FASD_DATA.lock`, gives up after 1 s.
+- `_fasd_db_rewrite <awk-program> [awk -v args...]`: shared body of add/delete. Takes the lock, creates the data file if missing, `mktemp`s a temp file, runs `$_FASD_AWK -F"|"` over `$_FASD_DATA` into it, then `mv`s it over `$_FASD_DATA` on success or `rm`s it on failure, unlocking in an `always` block. The caller exports its path list through `_fasd_list`, passed via `ENVIRON`.
+- `_fasd_add` / `_fasd_delete`: path validation (and the PWD filter, for add) plus the add/delete awk program, dispatched through `_fasd_db_rewrite`. `--add` rejects paths containing `|` or newline.
+- `_fasd_query <typ> <fnd> <mode>`: orchestrates `_fasd_query_load` (raw `path|rank|time` rows from the backends), `_fasd_query_patterns` (builds the 3 match passes: exact glob, then case-insensitive `(#i)`, then fuzzy if `_FASD_FUZZY > 0`, allowing up to `_FASD_FUZZY` non-`/` chars between query chars; query words are quoted with `${(b)...}`, pattern `*w1*...*wN[^/]#`, last word in last segment, a trailing `$` drops the `[^/]#`), and `_fasd_query_score` (frecency awk: `rank`, `recent`, or the default `rank * frecent(last_access)` with weights 6/4/2/1 for <1h/<1d/<1w/older; reads matched lines on stdin, prints `score path` lines).
+- `_fasd_backend <name>`: emits `path|rank|time` rows from `native` (the data file), `viminfo`, `recently-used`, `current`, `spotlight` (macOS `mdfind`), or `eval`s any other name as a custom command.
+- `_fasd_word_complete_trigger`: tab-completion plumbing for the `,query` / `f,query` / `query,,d` word-completion syntax (`--word-complete-trigger`). `--complete` is handled inline in `_fasd_parse_args`.
+- `_fasd_main`: the old default `*` branch. Declares the locals `_fasd_parse_args`/`_fasd_select` fill dynamically, calls `_fasd_parse_args "$@"` (user-facing option parsing: `-s -l -i -e -b -B -a -d -f -r -t -R -[0-9]`, plus the `--query`/`--add`/`--delete`/`--version`/`--complete` pass-throughs; delegates single-token parsing to `_fasd_parse_opt`, and help text to `_fasd_usage`), then `_fasd_select` (sort/select results, `_fasd_add` the chosen path back to reinforce it, print or `eval "$exec"` on it).
 
 Data file format (`$_FASD_DATA`, default `~/.fasd`): one entry per line, `path|rank|last_access_epoch`. On add, an existing rank grows by `1/rank`. When total rank exceeds `_FASD_MAX` (2000), all ranks are multiplied by 0.9 (aging).
 

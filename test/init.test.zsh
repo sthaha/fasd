@@ -50,9 +50,55 @@ test_word_complete_trigger() {
   assert_eq "" "$(fasd --word-complete-trigger $t q)"
 }
 
+test_word_complete_results() {
+  [[ $MODE == source ]] || skip "needs the emitted completion functions"
+  export _FASD_NOW=1000
+  mkdir -p $T/tree/foo/sub
+  : >| $T/tree/foo/sub/foo.go
+  db_write "$T/tree/foo|1|1000" "$T/tree/foo/sub|5|1000" "$T/tree/foo/sub/foo.go|3|1000"
+  compdef() { :; }
+  eval "$(fasd --init zsh-wcomp)"
+  local -A compstate
+  compadd() { print -rl -- "${@[${@[(i)--]}+1,-1]}"; }
+  assert_eq "$T/tree/foo" "$(_fasd_zsh_word_complete d ,foo)" "d, lists dirs only"
+  assert_eq "$T/tree/foo/sub/foo.go" "$(_fasd_zsh_word_complete f foo.go)" "f, lists files only"
+  assert_eq "$T/tree/foo/sub/foo.go"$'\n'"$T/tree/foo" "$(_fasd_zsh_word_complete e ,foo)" \
+    "e lists both, best first"
+}
+
 test_command_complete() {
   print -r -- "$T/tree/alpha|1|1" >| $_FASD_DATA
   assert_eq "$T/tree/alpha" "$(fasd --complete 'fasd -d alp')"
+}
+
+test_only_fasd_functions_defined() {
+  [[ $MODE == source ]] || skip "sourced mode only"
+  local -a before after new
+  before=(${(k)functions})
+  source $FASD_BIN
+  after=(${(k)functions})
+  new=(${after:|before})
+  local fn
+  for fn in $new; do
+    case $fn in
+      fasd|_fasd_*|is-at-least) ;;
+      *) _fail "unexpected function defined by sourcing fasd" "$fn" ;;
+    esac
+  done
+}
+
+test_function_line_counts() {
+  [[ $MODE == source ]] || skip "sourced mode only"
+  local fn n
+  for fn in ${(k)functions}; do
+    case $fn in
+      fasd|_fasd_*) ;;
+      *) continue ;;
+    esac
+    [[ $fn == _fasd_init_code ]] && continue # mostly heredoc text
+    n=$(functions -- $fn | wc -l)
+    (( n <= 80 )) || _fail "$fn is $n lines (> 80)"
+  done
 }
 
 test_no_global_leaks() { # P1-4
