@@ -14,6 +14,18 @@ Fasd ranks files and directories by "frecency," that is, by both "frequency" and
 "recency." The term "frecency" was first coined by Mozilla and used in Firefox
 ([link](https://developer.mozilla.org/en/The_Places_frecency_algorithm)).
 
+# Credits
+
+Fasd was created by **Wei Dai** ([clvv/fasd](https://github.com/clvv/fasd)),
+who wrote nearly all of the original tool. It started from code in
+[z](https://github.com/rupa/z) by **rupa deadwyler**, whose
+[v](https://github.com/rupa/v) also inspired it. Thanks also to the upstream
+contributors Daniel Hahler, Benoit Cote-Jodoin, Ben O'Hara and Patrick.
+
+This repository ([sthaha/fasd](https://github.com/sthaha/fasd)) is a fork that
+rewrites fasd for zsh 5.5+ only, with a test suite and a zsh plugin. The design,
+the command-line interface and the frecency algorithm are Wei Dai's work.
+
 # Introduction
 
 If you use your shell to navigate and launch applications, fasd can help you do
