@@ -1,7 +1,7 @@
 # Spec: split `fasd()` into per-operation functions
 
-Status: proposed
-Branch: `feat-zsh-only` (after 213c95d)
+Status: implemented
+Branch: `main`
 Scope: `fasd`, `AGENTS.md`, possibly `test/init.test.zsh`
 
 ## Problem

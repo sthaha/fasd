@@ -1,7 +1,7 @@
 # Spec: zsh rewrite fixes and test suite
 
-Status: proposed
-Branch: `feat-zsh-only`
+Status: implemented
+Branch: `main`
 Scope: `fasd`, `Makefile`, new `test/`, docs
 
 ## Background

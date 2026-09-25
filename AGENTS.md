@@ -8,11 +8,11 @@ Fasd: command-line productivity booster that tracks files/directories used in sh
 
 The repo is also a zsh plugin (`zinit load sthaha/fasd`): `fasd.plugin.zsh` sources `fasd` from the clone and caches the output of `fasd --init <modules>` in `$ZSH_CACHE_DIR/fasd-init-cache`. The cache is regenerated when `fasd` is newer. If you change the emitted init code, the plugin picks it up through that mtime check. Tests: `test/plugin.test.zsh`.
 
-The `feat-zsh-only` branch rewrites `fasd` as a **zsh-only** script (`#!/usr/bin/env zsh`). The upstream version was portable POSIX sh supporting bash/tcsh/dash/ksh. `README.md` and `INSTALL.md` describe the zsh version; when docs and code disagree, code is the source of truth.
+This fork rewrites `fasd` as a **zsh-only** script (`#!/usr/bin/env zsh`). The upstream version was portable POSIX sh supporting bash/tcsh/dash/ksh. `README.md` and `INSTALL.md` describe the zsh version; when docs and code disagree, code is the source of truth.
 
 **Target: zsh 5.5 or newer only.** Any zsh feature available in 5.5 is fine to use. Do not add compatibility code for older zsh or for other shells.
 
-Planned fixes and the test suite design are in `docs/agent/spec/zsh-rewrite-improvements.md`.
+Design history lives in `docs/agent/spec/`: `zsh-rewrite-improvements.md` (bug fixes + test suite) and `fasd-function-refactor.md` (split into `_fasd_*` helpers). Both are implemented.
 
 ## Commands
 

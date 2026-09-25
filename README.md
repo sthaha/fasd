@@ -68,15 +68,11 @@ cp `f mov` .
 
 # Install
 
-Fasd is available in various package managers. Please check
-[the wiki page](https://github.com/clvv/fasd/wiki/Installing-via-Package-Managers)
-for an up-to-date list.
+Package managers and the upstream 1.0.1 downloads ship the original POSIX
+version of fasd, not this zsh rewrite. Use a plugin manager or a clone of
+this repository:
 
-You can also manually obtain a copy of fasd.
-
-Download fasd 1.0.1 from GitHub:
-[zip](https://github.com/clvv/fasd/zipball/1.0.1),
-[tar.gz](https://github.com/clvv/fasd/tarball/1.0.1).
+    git clone https://github.com/sthaha/fasd.git
 
 Fasd is a self-contained zsh script that can be either sourced or executed.
 It requires zsh 5.5 or newer. A Makefile is provided to install `fasd` to
@@ -86,6 +82,10 @@ With [zinit](https://github.com/zdharma-continuum/zinit) (or any plugin
 manager that supports the Zsh Plugin Standard), no install step is needed:
 
     zinit load sthaha/fasd
+
+    # or load it after the first prompt (zinit turbo mode)
+    zinit ice wait lucid
+    zinit light sthaha/fasd
 
 `fasd.plugin.zsh` sources `fasd` from the clone, so fasd runs as a shell
 function and the command hook does not start a process for every command.
