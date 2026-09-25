@@ -70,6 +70,18 @@ Fasd is a self-contained zsh script that can be either sourced or executed.
 It requires zsh 5.5 or newer. A Makefile is provided to install `fasd` to
 desired places.
 
+With [zinit](https://github.com/zdharma-continuum/zinit) (or any plugin
+manager that supports the Zsh Plugin Standard), no install step is needed:
+
+    zinit load sthaha/fasd
+
+`fasd.plugin.zsh` sources `fasd` from the clone, so fasd runs as a shell
+function and the command hook does not start a process for every command.
+The expanded init code is cached in `$ZSH_CACHE_DIR/fasd-init-cache` and
+regenerated when `fasd` changes. The plugin also defines the aliases
+`v` (open file in `$EDITOR`), `o` (open with `open`/`xdg-open`) and
+`j` (same as `z`).
+
 System-wide install:
 
     make install
